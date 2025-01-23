@@ -315,18 +315,18 @@ while True:
         else:
             explosion_effect = False
 
-        # Виведення повідомлення про зону тепер винесено назовні
+        
         if use_background and zone_message:
             cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
             
-            # Додаємо тривалість показу повідомлення
+            
             if time.time() - explosion_start_time > explosion_duration:
                 if time.time() - explosion_start_time < explosion_duration + 5:  # Показувати 3 секунди
                     cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
                 else:
-                    zone_message = ""  # Очищення повідомлення  # Очищення повідомлення  # Очищення повідомлення
+                    zone_message = ""  
     
     results = model(frame)
     
@@ -347,7 +347,7 @@ while True:
 
     draw_crosshair(frame, crosshair_x, crosshair_y)
 
-    # Display score and status
+    
     cv2.putText(frame, f'Score: {score}', (10, 30), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
@@ -355,7 +355,7 @@ while True:
     cv2.putText(frame, aim_status, (10, 60), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    # Display shot accuracy
+    
     if time.time() - accuracy_display_time < accuracy_display_duration:
         accuracy_text = f"Accuracy: {current_accuracy:.1f}%"
         cv2.putText(frame, accuracy_text, (10, 90),

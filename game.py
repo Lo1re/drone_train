@@ -374,7 +374,7 @@ while True:
         auto_aim = not auto_aim
     elif key == ord('e'): 
         use_background = not use_background
-#кінець
+
 camera.release()
 cv2.destroyAllWindows()
 pygame.quit()

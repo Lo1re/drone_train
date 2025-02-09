@@ -1,0 +1,15 @@
+{
+    "score": 4,
+    "shots_fired": 289,
+    "accuracy_list": [
+        100,
+        100,
+        100,
+        100
+    ],
+    "game_duration": 39.185014486312866,
+    "difficulty_level": 3,
+    "num_drones": 3,
+    "auto_aim": true,
+    "timestamp": "2025-02-09T23:01:41.215941"
+}

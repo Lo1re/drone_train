@@ -1,3 +1,4 @@
+import json
 import pygame
 import cv2
 import subprocess
@@ -75,7 +76,7 @@ def draw_text(screen, text, x, y, color=(255, 255, 255)):
     screen.blit(text_surface, (x, y))
 
 def start_game():
-    # Save settings to file
+
     with open("game_settings.txt", "w") as f:
         f.write(f"{difficulty_level}\n{num_drones}")
     
@@ -96,6 +97,22 @@ def change_background():
         with open("background_config.txt", "w") as f:
             f.write(file_path)
         print("Фон гри змінено на", file_path)
+def view_stats():
+    try:
+        with open("game_results.json", "r") as f:
+            results = json.load(f)
+            stats_window = tk.Tk()
+            stats_window.title("Game Statistics")
+            text = tk.Text(stats_window, wrap='word')
+            text.insert(tk.END, json.dumps(results, indent=4))
+            text.pack(expand=True, fill='both')
+            stats_window.mainloop()
+    except FileNotFoundError:
+        error_window = tk.Tk()
+        error_window.title("Error")
+        label = tk.Label(error_window, text="No game statistics available yet")
+        label.pack(padx=20, pady=20)
+        error_window.mainloop()
 
 def quit_game():
     pygame.quit()
@@ -107,7 +124,7 @@ pygame.display.set_caption("Меню")
 menu_background = pygame.image.load("D:/jammer/myGame/images/menu_background.jpg")
 menu_background = pygame.transform.scale(menu_background, (1280, 720))
 
-# Налаштування шрифту та кольорів для випадаючих списків
+
 COLOR_INACTIVE = (100, 200, 255)
 COLOR_ACTIVE = (0, 150, 255)
 COLOR_LIST_INACTIVE = (200, 200, 200)
@@ -115,7 +132,6 @@ COLOR_LIST_ACTIVE = (150, 150, 150)
 
 font = pygame.font.Font(None, 32)
 
-# Створення випадаючих списків
 list_difficulty = DropDown(
     [COLOR_INACTIVE, COLOR_ACTIVE],
     [COLOR_LIST_INACTIVE, COLOR_LIST_ACTIVE],
@@ -127,11 +143,11 @@ list_difficulty = DropDown(
      "Складний (багато дронів)"]
 )
 
-# Перемістили список дронів вліво
+
 list_drones = DropDown(
     [COLOR_INACTIVE, COLOR_ACTIVE],
     [COLOR_LIST_INACTIVE, COLOR_LIST_ACTIVE],
-    160, 250, 300, 40,  # Нова позиція X=160 замість 490
+    160, 250, 300, 40,  
     font,
     "Виберіть кількість дронів",
     ["1", "2", "3", "4", "5"]
@@ -149,7 +165,7 @@ while running:
 
     screen.blit(menu_background, (0, 0))
     
-    # Оновлення та відображення випадаючих списків
+   
     selected_difficulty = list_difficulty.update(event_list)
     if selected_difficulty >= 0:
         difficulty_level = selected_difficulty + 1
@@ -160,19 +176,18 @@ while running:
         num_drones = selected_drones + 1
         list_drones.main = list_drones.options[selected_drones]
 
-    # Додаємо текст-підказку для вибору кількості дронів
+    
     if difficulty_level == 3:
         draw_text(screen, "Кількість дронів:", 160, 220)
         list_drones.draw(screen)
 
     list_difficulty.draw(screen)
     
-    # Малювання кнопок
     draw_button(screen, "Старт", 490, 400, 300, 60, (0, 0, 255), (0, 0, 200), start_game)
     draw_button(screen, "Калібрування", 490, 480, 300, 60, (255, 255, 0), (200, 200, 0), calibrate)
     draw_button(screen, "Змінити фон", 490, 560, 300, 60, (0, 150, 255), (0, 100, 200), change_background)
     draw_button(screen, "Вихід", 490, 640, 300, 60, (255, 0, 0), (200, 0, 0), quit_game)
-    
+    draw_button(screen, "Statistics", 20, 20, 300, 60, (0, 255, 0), (0, 200, 0), view_stats)
     pygame.display.flip()
 
 pygame.quit()

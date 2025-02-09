@@ -5,18 +5,18 @@ import json
 import time
 import subprocess
 
-# Initialize Arduino
+
 board = Arduino('COM12')
 servo_x = board.get_pin('d:9:s')
 servo_y = board.get_pin('d:10:s')
 laser_pin = board.get_pin('d:3:o')
 
-# Initial setup
+
 servo_x.write(90)
 servo_y.write(70)
 laser_pin.write(0)
 
-# Global variables
+# Global 
 crosshair_x = 640
 crosshair_y = 360
 calibration_points = []
@@ -123,7 +123,7 @@ def main():
     cv2.destroyAllWindows()
     
     if success:
-        subprocess.run(["python", "menu.py"])  # Повернення в меню після калібрування
+        subprocess.run(["python", "menu.py"])  
     
     return success
 

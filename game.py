@@ -6,6 +6,7 @@ import time
 import random
 import pygame
 from pyfirmata import Arduino, util
+from datetime import datetime
 import json
 
 pygame.mixer.init()
@@ -72,8 +73,10 @@ accuracy_display_time = 0
 accuracy_display_duration = 2.0
 use_background = False
 zone_message = ""
+shots_fired = 0
+game_start_time = time.time()
+accuracy_list = []
 
-# Завантажуємо налаштування гри
 with open("game_settings.txt", "r") as f:
     settings = f.read().strip().split('\n')
     difficulty_level = int(settings[0])
@@ -83,6 +86,20 @@ def load_calibration(filename='calibration_data.json'):
     with open(filename, 'r') as f:
         calibration_data = json.load(f)
     return calibration_data
+
+def log_game_results(score, shots_fired, accuracy_list, game_duration, difficulty_level, num_drones, auto_aim):
+    results = {
+        "score": score,
+        "shots_fired": shots_fired,
+        "accuracy_list": accuracy_list,
+        "game_duration": game_duration,
+        "difficulty_level": difficulty_level,
+        "num_drones": num_drones,
+        "auto_aim": auto_aim,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open("game_results.json", "w") as f:
+        json.dump(results, f, indent=4)
 
 calibration_data = load_calibration()
 servo_x_min = min(point["servo_x"] for point in calibration_data["points"])
@@ -225,6 +242,8 @@ def mouse_callback(event, x, y, flags, param):
     global explosion_start_time, explosion_pos, current_accuracy, accuracy_display_time, laser_pin, zone_message
 
     if event == cv2.EVENT_MOUSEMOVE:
+        global shots_fired
+        shots_fired += 1   
         crosshair_x = x
         crosshair_y = y
     servo_x.write(map_angle(crosshair_x, 0, frame_w))
@@ -242,6 +261,8 @@ def mouse_callback(event, x, y, flags, param):
             current_accuracy = 100
             for pred_center in predicted_center:
                 if abs(crosshair_x - pred_center[0]) < drone_w // 2 and abs(crosshair_y - pred_center[1]) < drone_w // 2:
+                    if current_accuracy > 0:  
+                        accuracy_list.append(current_accuracy)
                     score += 1
                     explosion_effect = True
                     explosion_start_time = time.time()
@@ -254,6 +275,8 @@ def mouse_callback(event, x, y, flags, param):
             for curr_center in current_center:
                 if abs(crosshair_x - curr_center[0]) < drone_w // 2 and abs(crosshair_y - curr_center[1]) < drone_w // 2:
                     current_accuracy = calculate_shot_accuracy(crosshair_x, crosshair_y, curr_center, predicted_center[0])
+                    if current_accuracy > 0:  
+                        accuracy_list.append(current_accuracy)
                     score += 1
                     explosion_effect = True
                     explosion_start_time = time.time()
@@ -382,6 +405,8 @@ while True:
 
     key = cv2.waitKey(1)
     if key == ord('q'):
+        game_duration = time.time() - game_start_time
+        log_game_results(score, shots_fired, accuracy_list, game_duration, difficulty_level, num_drones, auto_aim)
         break
     elif key == ord(' '):
         auto_aim = not auto_aim
@@ -392,4 +417,3 @@ camera.release()
 cv2.destroyAllWindows()
 pygame.quit()
 exit()
-

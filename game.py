@@ -73,6 +73,12 @@ accuracy_display_duration = 2.0
 use_background = False
 zone_message = ""
 
+# Завантажуємо налаштування гри
+with open("game_settings.txt", "r") as f:
+    settings = f.read().strip().split('\n')
+    difficulty_level = int(settings[0])
+    num_drones = int(settings[1])
+
 def load_calibration(filename='calibration_data.json'):
     with open(filename, 'r') as f:
         calibration_data = json.load(f)
@@ -99,93 +105,102 @@ def map_angle_y(value, left_min, left_max, right_min=servo_y_min, right_max=serv
     return round(right_min + (value_scaled * right_span))
 
 class DroneMovement:
-    def __init__(self):
+    def __init__(self, speed_range=(3, 7), drone_count=1):
+        self.drone_count = drone_count
+        self.drones = [self.create_drone(speed_range) for _ in range(drone_count)]
         self.respawn()
-        self.prev_x = self.x
-        self.prev_y = self.y
-        self.velocity_x = 0
-        self.velocity_y = 0
         self.prediction_steps = 5
+
+    def create_drone(self, speed_range):
+        return {
+            "x": random.randint(drone_w, frame_w - drone_w) if frame_w > 0 else 300,
+            "y": random.randint(drone_h, frame_h - drone_h) if frame_h > 0 else 200,
+            "angle": random.uniform(0, 2 * math.pi),
+            "speed": random.uniform(*speed_range),
+            "direction_change_time": time.time() + random.uniform(0.5, 2.0)
+        }
 
     def respawn(self):
         global no_drone_period, drone_respawn_time
-        self.x = random.randint(drone_w, frame_w - drone_w) if frame_w > 0 else 300
-        self.y = random.randint(drone_h, frame_h - drone_h) if frame_h > 0 else 200
-        self.angle = random.uniform(0, 2 * math.pi)
-        self.speed = random.uniform(3, 7)
-        self.direction_change_time = time.time() + random.uniform(0.5, 2.0)
+        for drone in self.drones:
+            drone["x"] = random.randint(drone_w, frame_w - drone_w) if frame_w > 0 else 300
+            drone["y"] = random.randint(drone_h, frame_h - drone_h) if frame_h > 0 else 200
+            drone["angle"] = random.uniform(0, 2 * math.pi)
+            drone["speed"] = random.uniform(3, 7)
+            drone["direction_change_time"] = time.time() + random.uniform(0.5, 2.0)
         no_drone_period = True
         drone_respawn_time = time.time() + drone_respawn_delay
-    
+
     def update(self):
         global no_drone_period, drone_respawn_time
         current_time = time.time()
-        
+
         if no_drone_period:
             if current_time >= drone_respawn_time:
                 no_drone_period = False
             else:
                 return None
-        
-        if current_time > self.direction_change_time:
-            self.angle += random.uniform(-math.pi/4, math.pi/4)
-            self.speed = random.uniform(3, 7)
-            self.direction_change_time = current_time + random.uniform(0.5, 2.0)
-        
-        self.velocity_x = self.x - self.prev_x
-        self.velocity_y = self.y - self.prev_y
-        self.prev_x = self.x
-        self.prev_y = self.y
-        
-        self.x += math.cos(self.angle) * self.speed
-        self.y += math.sin(self.angle) * self.speed
-        
-        if self.x < 0 or self.x > frame_w - drone_w:
-            self.angle = math.pi - self.angle
-            self.x = max(0, min(self.x, frame_w - drone_w))
-        if self.y < 0 or self.y > frame_h - drone_h:
-            self.angle = -self.angle
-            self.y = max(0, min(self.y, frame_h - drone_h))
-        
-        return int(self.x), int(self.y)
+
+        for drone in self.drones:
+            if current_time > drone["direction_change_time"]:
+                drone["angle"] += random.uniform(-math.pi / 4, math.pi / 4)
+                drone["speed"] = random.uniform(3, 7) if difficulty_level == 1 else random.uniform(5, 10)
+                drone["direction_change_time"] = current_time + random.uniform(0.5, 2.0)
+
+            drone["x"] += math.cos(drone["angle"]) * drone["speed"]
+            drone["y"] += math.sin(drone["angle"]) * drone["speed"]
+
+            if drone["x"] < 0 or drone["x"] > frame_w - drone_w:
+                drone["angle"] = math.pi - drone["angle"]
+                drone["x"] = max(0, min(drone["x"], frame_w - drone_w))
+            if drone["y"] < 0 or drone["y"] > frame_h - drone_h:
+                drone["angle"] = -drone["angle"]
+                drone["y"] = max(0, min(drone["y"], frame_h - drone_h))
+
+        return [(int(drone["x"]), int(drone["y"])) for drone in self.drones]
 
     def predict_position(self):
         if no_drone_period:
-            return int(self.x), int(self.y)
-        
-        predicted_x = self.x
-        predicted_y = self.y
-        
-        for _ in range(self.prediction_steps):
-            predicted_x += self.velocity_x
-            predicted_y += self.velocity_y
-            
-            if predicted_x < 0 or predicted_x > frame_w - drone_w:
-                self.velocity_x *= -1
-                predicted_x = max(0, min(predicted_x, frame_w - drone_w))
-            if predicted_y < 0 or predicted_y > frame_h - drone_h:
-                self.velocity_y *= -1
-                predicted_y = max(0, min(predicted_y, frame_h - drone_h))
-        
-        return int(predicted_x), int(predicted_y)
+            return [(int(drone["x"]), int(drone["y"])) for drone in self.drones]
+
+        predicted_positions = []
+        for drone in self.drones:
+            predicted_x = drone["x"]
+            predicted_y = drone["y"]
+            velocity_x = math.cos(drone["angle"]) * drone["speed"]
+            velocity_y = math.sin(drone["angle"]) * drone["speed"]
+
+            for _ in range(self.prediction_steps):
+                predicted_x += velocity_x
+                predicted_y += velocity_y
+
+                if predicted_x < 0 or predicted_x > frame_w - drone_w:
+                    velocity_x *= -1
+                    predicted_x = max(0, min(predicted_x, frame_w - drone_w))
+                if predicted_y < 0 or predicted_y > frame_h - drone_h:
+                    velocity_y *= -1
+                    predicted_y = max(0, min(predicted_y, frame_h - drone_h))
+
+            predicted_positions.append((int(predicted_x), int(predicted_y)))
+
+        return predicted_positions
 
     def get_predicted_center(self):
-        pred_x, pred_y = self.predict_position()
-        return (pred_x + drone_w // 2, pred_y + drone_h // 2)
+        return [(pred[0] + drone_w // 2, pred[1] + drone_h // 2) for pred in self.predict_position()]
 
     def get_current_center(self):
-        return (int(self.x + drone_w // 2), int(self.y + drone_h // 2))
+        return [(int(drone["x"] + drone_w // 2), int(drone["y"] + drone_h // 2)) for drone in self.drones]
 
 def calculate_shot_accuracy(shot_x, shot_y, current_center, predicted_center):
-    current_distance = math.sqrt((shot_x - current_center[0])**2 + (shot_y - current_center[1])**2)
-    predicted_distance = math.sqrt((shot_x - predicted_center[0])**2 + (shot_y - predicted_center[1])**2)
-    max_distance = math.sqrt(drone_w**2 + drone_h**2) / 2
-    
+    current_distance = math.sqrt((shot_x - current_center[0]) ** 2 + (shot_y - current_center[1]) ** 2)
+    predicted_distance = math.sqrt((shot_x - predicted_center[0]) ** 2 + (shot_y - predicted_center[1]) ** 2)
+    max_distance = math.sqrt(drone_w ** 2 + drone_h ** 2) / 2
+
     if predicted_distance < current_distance:
         accuracy = max(0, 100 * (1 - predicted_distance / max_distance))
     else:
         accuracy = max(0, 70 * (1 - current_distance / max_distance))
-    
+
     return min(100, accuracy)
 
 def draw_crosshair(frame, x, y, size=20, color=(0, 0, 255)):
@@ -204,6 +219,7 @@ def check_drone_zone(crosshair_x, middle_x):
         return "Warning! Drone destroyed in a high-risk zone. Risk to people or buildings."
     else:
         return "Target destroyed in a safe zone. Continue operation."
+
 def mouse_callback(event, x, y, flags, param):
     global crosshair_x, crosshair_y, drone_active, score, explosion_effect
     global explosion_start_time, explosion_pos, current_accuracy, accuracy_display_time, laser_pin, zone_message
@@ -224,26 +240,30 @@ def mouse_callback(event, x, y, flags, param):
 
         if auto_aim:
             current_accuracy = 100
-            if abs(crosshair_x - predicted_center[0]) < drone_w // 2 and abs(crosshair_y - predicted_center[1]) < drone_h // 2:
-                score += 1
-                explosion_effect = True
-                explosion_start_time = time.time()
-                explosion_pos = predicted_center
-                drone_movement.respawn()
-                if use_background:
-                    zone_message = check_drone_zone(crosshair_x, frame_w // 2)
+            for pred_center in predicted_center:
+                if abs(crosshair_x - pred_center[0]) < drone_w // 2 and abs(crosshair_y - pred_center[1]) < drone_w // 2:
+                    score += 1
+                    explosion_effect = True
+                    explosion_start_time = time.time()
+                    explosion_pos = pred_center
+                    drone_movement.respawn()
+                    if use_background:
+                        zone_message = check_drone_zone(crosshair_x, frame_w // 2)
+                    break
         else:
-            if abs(crosshair_x - current_center[0]) < drone_w // 2 and abs(crosshair_y - current_center[1]) < drone_h // 2:
-                current_accuracy = calculate_shot_accuracy(crosshair_x, crosshair_y, current_center, predicted_center)
-                score += 1
-                explosion_effect = True
-                explosion_start_time = time.time()
-                explosion_pos = current_center
-                drone_movement.respawn()
-                if use_background:
-                    zone_message = check_drone_zone(crosshair_x, frame_w // 2)
-            else:
-                current_accuracy = 0
+            for curr_center in current_center:
+                if abs(crosshair_x - curr_center[0]) < drone_w // 2 and abs(crosshair_y - curr_center[1]) < drone_w // 2:
+                    current_accuracy = calculate_shot_accuracy(crosshair_x, crosshair_y, curr_center, predicted_center[0])
+                    score += 1
+                    explosion_effect = True
+                    explosion_start_time = time.time()
+                    explosion_pos = curr_center
+                    drone_movement.respawn()
+                    if use_background:
+                        zone_message = check_drone_zone(crosshair_x, frame_w // 2)
+                    break
+                else:
+                    current_accuracy = 0
 
         accuracy_display_time = time.time()
 
@@ -268,7 +288,7 @@ def handle_keys():
 
 cv2.namedWindow("Drone Hunter")
 cv2.setMouseCallback("Drone Hunter", mouse_callback)
-drone_movement = DroneMovement()
+drone_movement = DroneMovement(speed_range=(3, 5) if difficulty_level == 1 else (5, 10), drone_count=num_drones)
 
 pygame.init()
 
@@ -297,13 +317,13 @@ while True:
     frame_h, frame_w = frame.shape[:2]
     
     if drone_active:
-        updated_pos = drone_movement.update()
-        if updated_pos is not None:
-            x_pos, y_pos = updated_pos
-            roi = frame[y_pos:y_pos + drone_h, x_pos:x_pos + drone_w]
-            for c in range(3):
-                roi[:, :, c] = roi[:, :, c] * (1 - drone_alpha) + drone_rgb[:, :, c] * drone_alpha
-            frame[y_pos:y_pos + drone_h, x_pos:x_pos + drone_w] = roi
+        updated_positions = drone_movement.update()
+        if updated_positions is not None:
+            for i, (x_pos, y_pos) in enumerate(updated_positions):
+                roi = frame[y_pos:y_pos + drone_h, x_pos:x_pos + drone_w]
+                for c in range(3):
+                    roi[:, :, c] = roi[:, :, c] * (1 - drone_alpha) + drone_rgb[:, :, c] * drone_alpha
+                frame[y_pos:y_pos + drone_h, x_pos:x_pos + drone_w] = roi
     
     if explosion_effect:
         current_time = time.time()
@@ -315,30 +335,30 @@ while True:
             explosion_effect = False
 
         if use_background and zone_message:
-            cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
+            cv2.putText(frame, zone_message, (frame_w // 2 - 400, frame_h // 2 + 100),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
             
             if time.time() - explosion_start_time > explosion_duration:
                 if time.time() - explosion_start_time < explosion_duration + 5:
-                    cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
+                    cv2.putText(frame, zone_message, (frame_w // 2 - 400, frame_h // 2 + 100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
                 else:
                     zone_message = ""
-    
+
     results = model(frame)
     
     if not no_drone_period:
         if auto_aim and drone_active and len(results[0].boxes) > 0:
-            drone_predicted_x, drone_predicted_y = drone_movement.predict_position()
+            drone_predicted_x, drone_predicted_y = drone_movement.predict_position()[0]
             crosshair_x = drone_predicted_x + drone_w // 2
             crosshair_y = drone_predicted_y + drone_h // 2
             
             servo_x.write(map_angle(crosshair_x, 0, frame_w))
             servo_y.write(map_angle_y(crosshair_y, 0, frame_h))
             
-            box = results[0].boxes[0]
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            for box in results[0].boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
     draw_crosshair(frame, crosshair_x, crosshair_y)
 
@@ -355,7 +375,7 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     if no_drone_period:
-        cv2.putText(frame, "RELOADING...", (frame_w//2 - 100, frame_h//2), 
+        cv2.putText(frame, "RELOADING...", (frame_w // 2 - 100, frame_h // 2), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
 
     cv2.imshow("Drone Hunter", frame)
@@ -372,3 +392,4 @@ camera.release()
 cv2.destroyAllWindows()
 pygame.quit()
 exit()
+

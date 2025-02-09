@@ -6,15 +6,12 @@ import time
 import random
 import pygame
 from pyfirmata import Arduino, util
-
+import json
 
 pygame.mixer.init()
 shot_sound = pygame.mixer.Sound("D:/jammer/myGame/sound/blaster.mp3")
-
-
 model = YOLO("D:/jammer/myGame/yolo8/yolov8n-drone.pt")
 model.to('cuda')
-
 
 camera = cv2.VideoCapture(0)
 camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -22,7 +19,6 @@ camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 if not camera.isOpened():
     print("Failed to open the camera")
     exit()
-
 
 drone_image_path = "D:/jammer/myGame/images/drone.png"
 background_image_path = "D:/jammer/myGame/images/background2.jpg" 
@@ -39,29 +35,24 @@ if background_image is None:
 
 background_image = cv2.resize(background_image, (1280, 720))
 
-
 drone_rgb = drone_image[:, :, :3]
 drone_alpha = drone_image[:, :, 3] if drone_image.shape[2] == 4 else np.ones_like(drone_image[:,:,0])
 drone_alpha = cv2.normalize(drone_alpha, None, 0, 1, cv2.NORM_MINMAX)
-
 
 drone_scale = 0.4
 drone_h, drone_w = int(drone_rgb.shape[0] * drone_scale), int(drone_rgb.shape[1] * drone_scale)
 drone_rgb = cv2.resize(drone_rgb, (drone_w, drone_h))
 drone_alpha = cv2.resize(drone_alpha, (drone_w, drone_h))
 
-
-board = Arduino('COM7')  
+board = Arduino('COM12')
 servo_x = board.get_pin('d:9:s')
 servo_y = board.get_pin('d:10:s')
 laser_pin = board.get_pin('d:3:o')
 
-
 servo_x.write(90)
 servo_y.write(70)
-laser_pin.write(0) 
+laser_pin.write(0)
 
-#глобальны змінні
 auto_aim = False
 score = 0
 crosshair_x = 640
@@ -80,6 +71,31 @@ accuracy_display_time = 0
 accuracy_display_duration = 2.0
 use_background = False
 zone_message = ""
+
+def load_calibration(filename='calibration_data.json'):
+    with open(filename, 'r') as f:
+        calibration_data = json.load(f)
+    return calibration_data
+
+calibration_data = load_calibration()
+servo_x_min = min(point["servo_x"] for point in calibration_data["points"])
+servo_x_max = max(point["servo_x"] for point in calibration_data["points"])
+servo_y_min = min(point["servo_y"] for point in calibration_data["points"])
+servo_y_max = max(point["servo_y"] for point in calibration_data["points"])
+
+def map_angle(value, left_min, left_max, right_min=servo_x_min, right_max=servo_x_max):
+    value = max(left_min, min(value, left_max))
+    left_span = left_max - left_min
+    right_span = right_max - right_min
+    value_scaled = float(value - left_min) / float(left_span)
+    return round(right_min + (value_scaled * right_span))
+
+def map_angle_y(value, left_min, left_max, right_min=servo_y_min, right_max=servo_y_max):
+    value = max(left_min, min(value, left_max))
+    left_span = left_max - left_min
+    right_span = right_max - right_min
+    value_scaled = float(value - left_min) / float(left_span)
+    return round(right_min + (value_scaled * right_span))
 
 class DroneMovement:
     def __init__(self):
@@ -187,26 +203,21 @@ def check_drone_zone(crosshair_x, middle_x):
         return "Warning! Drone destroyed in a high-risk zone. Risk to people or buildings."
     else:
         return "Target destroyed in a safe zone. Continue operation."
-
-
 def mouse_callback(event, x, y, flags, param):
     global crosshair_x, crosshair_y, drone_active, score, explosion_effect
     global explosion_start_time, explosion_pos, current_accuracy, accuracy_display_time, laser_pin, zone_message
-    
 
     if event == cv2.EVENT_MOUSEMOVE:
         crosshair_x = x
         crosshair_y = y
-    servo_x.write(map_angle(crosshair_x, 0, frame_w, 110, 52))
-    servo_y.write(map_angle(crosshair_y, 0, frame_h, 52, 80))
+    servo_x.write(map_angle(crosshair_x, 0, frame_w))
+    servo_y.write(map_angle_y(crosshair_y, 0, frame_h))
+    
     if event == cv2.EVENT_LBUTTONDOWN:
-        if no_drone_period:
-            return
-
         shot_sound.play()
-        laser_pin.write(1)  
-        time.sleep(1)  
-        laser_pin.write(0)  
+        laser_pin.write(1)
+        time.sleep(1)
+        laser_pin.write(0)
         current_center = drone_movement.get_current_center()
         predicted_center = drone_movement.get_predicted_center()
 
@@ -238,7 +249,6 @@ def mouse_callback(event, x, y, flags, param):
 def handle_keys():
     global crosshair_x, crosshair_y
     
- 
     keys = pygame.key.get_pressed()
     move_speed = 5
     
@@ -252,20 +262,12 @@ def handle_keys():
         crosshair_x = min(frame_w - 1, crosshair_x + move_speed)
     
     if frame_w > 0 and frame_h > 0:
-        servo_x.write(map_angle(crosshair_x, 0, frame_w, 110, 52))
-        servo_y.write(map_angle(crosshair_y, 0, frame_h, 52, 80))
-
-def map_angle(value, left_min, left_max, right_min, right_max):
-    value = max(left_min, min(value, left_max))
-    left_span = left_max - left_min
-    right_span = right_max - right_min
-    value_scaled = float(value - left_min) / float(left_span)
-    return round(max(52, min(110, right_min + (value_scaled * right_span))))
+        servo_x.write(map_angle(crosshair_x, 0, frame_w))
+        servo_y.write(map_angle_y(crosshair_y, 0, frame_h))
 
 cv2.namedWindow("Drone Hunter")
 cv2.setMouseCallback("Drone Hunter", mouse_callback)
 drone_movement = DroneMovement()
-
 
 pygame.init()
 
@@ -278,18 +280,15 @@ while True:
             if no_drone_period:
                 continue
             shot_sound.play()
-            laser_pin.write(1)  
-            time.sleep(1)  
-            laser_pin.write(0)  
+            laser_pin.write(1)
+            time.sleep(1)
+            laser_pin.write(0)
 
     handle_keys()
     
-  
     if use_background:
-     
         frame = background_image.copy()
     else:
-        
         ret, frame = camera.read()
         if not ret:
             break
@@ -298,7 +297,6 @@ while True:
     
     if drone_active:
         updated_pos = drone_movement.update()
-        
         if updated_pos is not None:
             x_pos, y_pos = updated_pos
             roi = frame[y_pos:y_pos + drone_h, x_pos:x_pos + drone_w]
@@ -315,31 +313,27 @@ while True:
         else:
             explosion_effect = False
 
-        
         if use_background and zone_message:
             cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
             
-            
             if time.time() - explosion_start_time > explosion_duration:
-                if time.time() - explosion_start_time < explosion_duration + 5:  # Показувати 3 секунди
+                if time.time() - explosion_start_time < explosion_duration + 5:
                     cv2.putText(frame, zone_message, (frame_w//2 - 400, frame_h//2+100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
                 else:
-                    zone_message = ""  
+                    zone_message = ""
     
     results = model(frame)
     
-
     if not no_drone_period:
         if auto_aim and drone_active and len(results[0].boxes) > 0:
             drone_predicted_x, drone_predicted_y = drone_movement.predict_position()
             crosshair_x = drone_predicted_x + drone_w // 2
             crosshair_y = drone_predicted_y + drone_h // 2
             
-    
-            servo_x.write(map_angle(crosshair_x, 0, frame_w, 110, 53))
-            servo_y.write(map_angle(crosshair_y, 0, frame_h, 52, 80))
+            servo_x.write(map_angle(crosshair_x, 0, frame_w))
+            servo_y.write(map_angle_y(crosshair_y, 0, frame_h))
             
             box = results[0].boxes[0]
             x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -347,7 +341,6 @@ while True:
 
     draw_crosshair(frame, crosshair_x, crosshair_y)
 
-    
     cv2.putText(frame, f'Score: {score}', (10, 30), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
@@ -355,7 +348,6 @@ while True:
     cv2.putText(frame, aim_status, (10, 60), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    
     if time.time() - accuracy_display_time < accuracy_display_duration:
         accuracy_text = f"Accuracy: {current_accuracy:.1f}%"
         cv2.putText(frame, accuracy_text, (10, 90),
@@ -372,9 +364,10 @@ while True:
         break
     elif key == ord(' '):
         auto_aim = not auto_aim
-    elif key == ord('e'): 
+    elif key == ord('e'):
         use_background = not use_background
 
 camera.release()
 cv2.destroyAllWindows()
 pygame.quit()
+exit()

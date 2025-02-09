@@ -21,7 +21,8 @@ if not camera.isOpened():
     exit()
 
 drone_image_path = "D:/jammer/myGame/images/drone.png"
-background_image_path = "D:/jammer/myGame/images/background2.jpg" 
+with open("background_config.txt", "r") as f:
+    background_image_path = f.read().strip()
 drone_image = cv2.imread(drone_image_path, cv2.IMREAD_UNCHANGED)
 background_image = cv2.imread(background_image_path)
 

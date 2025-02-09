@@ -1,6 +1,8 @@
 import pygame
 import cv2
-import subprocess 
+import subprocess
+import tkinter as tk
+from tkinter import filedialog
 
 def draw_button(screen, text, x, y, width, height, color, hover_color, action=None):
     mouse = pygame.mouse.get_pos()
@@ -29,9 +31,13 @@ def calibrate():
     exit()
 
 def change_background():
-    global game_background
-    game_background = "new_background.jpg"  
-    print("Фон гри змінено")
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.png")])
+    if file_path:
+        with open("background_config.txt", "w") as f:
+            f.write(file_path)
+        print("Фон гри змінено на", file_path)
 
 def quit_game():
     pygame.quit()
@@ -43,7 +49,6 @@ pygame.display.set_caption("Меню")
 menu_background = pygame.image.load("D:/jammer/myGame/images/menu_background.jpg")
 menu_background = pygame.transform.scale(menu_background, (1280, 720))
 
-game_background = "background2.jpg"  
 running = True
 while running:
     screen.blit(menu_background, (0, 0))

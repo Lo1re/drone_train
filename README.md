@@ -1,7 +1,7 @@
 # Drone Hunter Training System
 
 A multimedia training simulator for anti-drone systems operators using AI-powered target detection and tracking. This project combines physical hardware (turret system) with virtual simulation to create an effective training environment for drone detection and neutralization.
-
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/90707aa7-8e4a-4817-a968-b99df95ed92d" />
 ## Overview
 
 The Drone Hunter Training System is designed to help train anti-drone system operators in a safe environment while simulating real combat scenarios. The system uses computer vision and AI to track targets, predict drone movement, and provide feedback on shot accuracy and potential civilian infrastructure risks.
